@@ -17,13 +17,12 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 
-// EMAIL CONFIG (GMAIL EXAMPLE)
-// You need to set EMAIL_USER and EMAIL_PASS in Render Environment Variables
+// EMAIL CONFIG
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER, // e.g. birthsafe@gmail.com
-    pass: process.env.EMAIL_PASS  // The App Password (not login password)
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
 });
 
@@ -33,10 +32,9 @@ const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 // --- ROUTE 1: SUBMIT PAYMENT ---
 app.post('/api/submit-payment', async (req, res) => {
   try {
-    // 1. Get new data points
     const { fullName, plan, whatsapp, telegram, country, state, email, receiptUrl } = req.body;
 
-    // 2. Save to Supabase
+    // 1. Save to Supabase (We save whatever comes in, frontend handles mapping)
     const { data, error } = await supabase
       .from('payments')
       .insert([{ 
@@ -54,14 +52,14 @@ app.post('/api/submit-payment', async (req, res) => {
 
     if (error) throw error;
 
-    // 3. Notify Admin Group
+    // 2. Notify Admin Group (Telegram Focused)
     const verifyLink = `${FRONTEND_URL}?id=${data.id}`;
     const message = `
 🚨 *New Payment Alert!*
-👤 *Name:* ${fullName}
-🌍 *Location:* ${state}, ${country}
-💰 *Plan:* ${plan}
-📧 *Email:* ${email}
+👤 ${fullName}
+💰 ${plan}
+✈️ *Telegram:* \`${telegram}\`
+🌍 ${state}, ${country}
 
 👇 *Verify here:*
 [Open Dashboard](${verifyLink})
@@ -81,7 +79,7 @@ app.post('/api/verify-payment', async (req, res) => {
   try {
     const { id, status } = req.body;
 
-    // 1. Fetch User Details First (To get Name and Email)
+    // 1. Fetch User Details
     const { data: user, error: fetchError } = await supabase
       .from('payments')
       .select('*')
@@ -93,31 +91,26 @@ app.post('/api/verify-payment', async (req, res) => {
     // 2. Update Status
     await supabase.from('payments').update({ status: status }).eq('id', id);
 
-    // 3. Send Telegram Notification with REAL NAME
+    // 3. Send Telegram Notification
     const icon = status === 'verified' ? '✅' : '❌';
-    const msg = `Payment for *${user.full_name}* has been marked as *${status.toUpperCase()}* ${icon}`;
+    const msg = `Payment for *${user.full_name}* marked as *${status.toUpperCase()}* ${icon}`;
     await bot.sendMessage(ADMIN_CHAT_ID, msg, { parse_mode: 'Markdown' });
 
     // 4. Send Email if Verified
     if (status === 'verified' && user.email) {
       const emailContent = `
         <h3>Hello ${user.full_name},</h3>
-        <p>Your payment for the <b>${user.plan_amount}</b> has been successfully verified! ✅</p>
-        <p>Here is what you need to get started:</p>
-        <ul>
-            <li><b>Link to Class:</b> <a href="#">Click here to join</a></li>
-            <li><b>Resources:</b> <a href="#">Download PDF</a></li>
-        </ul>
-        <p>Welcome to the BirthSafe family!</p>
+        <p>Your payment for <b>${user.plan_amount}</b> is confirmed! ✅</p>
+        <p>We are excited to have you on board.</p>
+        <p>We will contact you via Telegram (${user.telegram_number}) shortly.</p>
       `;
 
       await transporter.sendMail({
         from: '"BirthSafe NG" <' + process.env.EMAIL_USER + '>',
         to: user.email,
-        subject: 'Payment Verified - Welcome to BirthSafe! 🎉',
+        subject: 'Payment Verified! ✅',
         html: emailContent
       });
-      console.log(`Email sent to ${user.email}`);
     }
 
     res.json({ success: true });
@@ -128,19 +121,13 @@ app.post('/api/verify-payment', async (req, res) => {
   }
 });
 
-// --- CRON JOB: DAILY REPORT AT 1:00 AM WAT (Nigeria) ---
-// Render servers are usually UTC. 1 AM Nigeria = 00:00 UTC.
-// Cron Pattern: 0 0 * * * (Every day at midnight UTC)
+// --- CRON JOB: DAILY REPORT (1 AM NG Time) ---
 cron.schedule('0 0 * * *', async () => {
-  console.log("Running Daily Report...");
-
-  // Get start of yesterday
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   yesterday.setHours(0, 0, 0, 0);
   const dateStr = yesterday.toISOString();
 
-  // Fetch verified payments from last 24h
   const { data: payments } = await supabase
     .from('payments')
     .select('*')
@@ -148,34 +135,13 @@ cron.schedule('0 0 * * *', async () => {
     .gte('created_at', dateStr);
 
   if (!payments || payments.length === 0) {
-    bot.sendMessage(ADMIN_CHAT_ID, "📊 *Daily Report:* No new verified payments today.");
+    bot.sendMessage(ADMIN_CHAT_ID, "📊 *Daily Report:* No verified payments today.");
     return;
   }
 
-  // Calculate Stats
   const totalCount = payments.length;
-  // Group by Country/State
-  const locations = {};
-  payments.forEach(p => {
-    const loc = `${p.state_province || 'Unknown'}, ${p.country || 'Unknown'}`;
-    locations[loc] = (locations[loc] || 0) + 1;
-  });
-
-  let locSummary = "";
-  for (const [key, val] of Object.entries(locations)) {
-    locSummary += `• ${key}: ${val}\n`;
-  }
-
-  const report = `
-📊 *Daily Verified Report*
-📅 Date: ${new Date().toLocaleDateString()}
-
-✅ *Total Verified:* ${totalCount}
-
-🌍 *Location Breakdown:*
-${locSummary}
-  `;
-
+  // Summary logic...
+  const report = `📊 *Daily Verified:* ${totalCount} users.`;
   await bot.sendMessage(ADMIN_CHAT_ID, report, { parse_mode: 'Markdown' });
 });
 
