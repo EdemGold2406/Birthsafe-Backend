@@ -1,7 +1,7 @@
 {
   "name": "birthsafe-backend",
   "version": "1.0.0",
-  "description": "Payment verification backend",
+  "description": "Payment verification and Community Bot backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
