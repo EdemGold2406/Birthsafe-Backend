@@ -19,11 +19,9 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
-// --- BOT INITIALIZATION (ONLY ONCE) ---
-// Admin Bot handles payment alerts
+// --- BOT INITIALIZATION ---
 const adminBot = new TelegramBot(process.env.ADMIN_BOT_TOKEN, { polling: false });
 
-// Bria Bot handles community chat
 const briaBot = new TelegramBot(process.env.BRIA_BOT_TOKEN, { 
     polling: {
         params: { timeout: 10 }
@@ -41,26 +39,32 @@ const transporter = nodemailer.createTransport({
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// --- TEMPLATES ---
-const getVerifiedEmail20k = () => `
+// --- EMAIL TEMPLATES (FULL TEXT) ---
+
+const getVerifiedEmailStandard = () => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
 <p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
 <p>Please, listen to the Inaugural Session replay pinned in the group.</p>
 <p>You can also find the program schedule in the pinned messages in the group. Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
 <p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
-<p><b>To complete your registration, please follow these steps:</b></p>
-<p>Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you.</p>
+<p>To complete your registration, please follow these steps:</p>
+<p>Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you. If the link doesn’t open, try checking your network or use Google Chrome browser</p>
 <p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
-<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>`;
+<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
+`;
 
 const getVerifiedEmail32k = () => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
 <p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
-<p>Please, listen to the Inaugural Session replay pinned in the group. Access to materials granted in 24-48hrs.</p>
+<p>Please, listen to the Inaugural Session replay pinned in the group.</p>
+<p>You can also find the program schedule in the pinned messages in the group. Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
+<p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
 <p>To complete your registration, please follow these steps:</p>
+<p>Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you. If the link doesn’t open, try checking your network or use Google Chrome browser</p>
 <p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
-<p>Access your bonus resources here: <a href="https://birthsafeng.myflodesk.com/bwwps">https://birthsafeng.myflodesk.com/bwwps</a></p>
-<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>`;
+<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
+<p><a href="https://birthsafeng.myflodesk.com/bwwps">https://birthsafeng.myflodesk.com/bwwps</a></p>
+`;
 
 const getRejectedEmail = (reason) => `
 <p>Hello Mama,</p>
@@ -68,25 +72,78 @@ const getRejectedEmail = (reason) => `
 <p style="color:red;"><b>Unfortunately, it was not verified.</b></p>
 <p><b>Reason:</b> ${reason}</p>
 <p>If you believe this is a mistake, please call: 08123456789</p>
-<p>Regards,<br>BirthSafe Admin</p>`;
+<p>Regards,<br>BirthSafe Admin</p>
+`;
 
-const BRIA_PACKAGE = `
+const BRIA_WELCOME_PACKAGE = `
 To new mamas just joining ❤️
+
 Welcome 😊🤗 
+
 You have been added to your cohort.
+
+Please take note that access to your materials takes about 24hrs -48hrs (working days)after you fill the Google form.
+
+Now that you have been added to the group, the messages on the group might seem overwhelming and confusing.
+
+But calm down, mama.❤️ 
+
 Your priority should be getting your materials and implementing what you've learnt.
 
-1. Create a Selar account.
-2. Go through pinned messages.
-3. Join 'Online Event Centre': https://t.me/+FiZMxogFUXAzZGE0
-4. Join 'Consult Session Replays': https://t.me/+cIx-kOJwyVJiMjZk
+The chats in the group are from mamas who have already accessed their resources and need further clarification on them.
 
-Full details are provided in your onboarding email!
+While you wait for access, kindly do and note the following:
+
+1. Create a Selar account because you will need it to access your materials.
+
+2. Go through the pinned messages ( Look up your screen to locate it. Keep tapping to see other messages that are pinned)
+
+3. Join the 'Online Event Centre' and watch all the Replays pinned on the group. Here is the link👇
+https://t.me/+FiZMxogFUXAzZGE0
+
+4. We also have more Replays in the 'Consult Session Replays' Group. Here is the link below 👇 
+https://t.me/+cIx-kOJwyVJiMjZk
+
+5. If you have questions, kindly drop it in the group. Tag the admin to it and be patient. Admins will attend to it as soon as they see it. Please, ask repeatedly in case you don't get a response the first time.
+
+Alternatively, send your questions to mamacarebirthsafe@gmail.com 
+
+This is our official communication channel.
+
+For urgent cases, please go the hospital.
+
+6. If your PCV is less than 36%, we advise that after watching your PCV and Supplements Protocol, join the PCV Challenge Channel. (To be able to do this, fill the form in the pinned messages and wait for a reply within 48hrs - 72hrs)
+
+7. Kindly note that the 'Online Event Centre' is where we usually have our Group Consult Session every Sunday ( for the duration of the program) and Morning Check-in.
+
+Ensure you drop your question before the Group Consult Session with Doctor by 7pm. The channel to drop your questions will be opened and provided to you Sunday morning.
+
+Please, be present during the consult session so that you can answer follow-up questions from the doctor.
+
+8. When you get to 35/36 weeks, you are eligible to join the Injury Timer Group where you will NIL as a group every Sunday.(Please note that you still have to continue your individual NIL)
+
+9. You will be added to the Premium/Postpartum Group when the Regular program ends. We will announce in the group at the appropriate time.
+
+10. Please, make use of the pinned messages. It contains vital information and helpful tips that can help you in your Pregnancy.
+
+
+Thanks for usual cooperation 🥰🥰
+`;
+
+const ADMIN_CONTACT_MSG = `
+Hello Mama! 🌸
+
+For now, I am here to help you get settled. 
+If you have specific questions about the program or medical concerns, please contact our admin directly:
+
+👉 @Vihktorrr
+📧 mamacarebirthsafe@gmail.com
+
+They will provide the clarity you need! ❤️
 `;
 
 // --- API ROUTES ---
 
-// Submit Payment
 app.post('/api/submit-payment', async (req, res) => {
   try {
     const { fullName, plan, telegramNumber, country, state, email, receiptUrls } = req.body;
@@ -99,4 +156,97 @@ app.post('/api/submit-payment', async (req, res) => {
         telegram_number: telegramNumber,
         country, 
         state_province: state, 
-        email,
+        email, 
+        receipt_urls: receiptUrls 
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const message = `
+🚨 *New Payment Alert!*
+👤 *Name:* ${fullName}
+💰 *Plan:* ₦${plan}
+✈️ *Telegram:* \`${telegramNumber}\`
+📸 *Receipts:* ${receiptUrls.length}
+
+👇 *Verify here:*
+[Open Admin Dashboard](${FRONTEND_URL}?id=${data.id})`;
+
+    await adminBot.sendMessage(ADMIN_CHAT_ID, message, { parse_mode: 'Markdown' });
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/verify-payment', async (req, res) => {
+  try {
+    const { id, status, reason } = req.body;
+    const { data: user } = await supabase.from('payments').select('*').eq('id', id).single();
+    
+    await supabase.from('payments').update({ status, rejection_reason: reason || null }).eq('id', id);
+
+    if (status === 'verified') {
+        // Clean amount string to check if it's the 32k package
+        const amountStr = user.plan_amount.toString().replace(/,/g, '');
+        const amount = parseInt(amountStr);
+        
+        let html = amount >= 32000 ? getVerifiedEmail32k() : getVerifiedEmailStandard();
+
+        await transporter.sendMail({
+            from: `"BirthSafe NG" <${process.env.EMAIL_USER}>`,
+            to: user.email,
+            subject: 'Welcome to BirthSafe! 🤝',
+            html: html
+        });
+        await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ Verified: ${user.full_name}`);
+    } else {
+        await transporter.sendMail({
+            from: `"BirthSafe NG" <${process.env.EMAIL_USER}>`,
+            to: user.email,
+            subject: 'Payment Verification Failed ❌',
+            html: getRejectedEmail(reason)
+        });
+        await adminBot.sendMessage(ADMIN_CHAT_ID, `❌ Rejected: ${user.full_name}. Reason: ${reason}`);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Update failed" });
+  }
+});
+
+// --- BRIA BOT LOGIC ---
+
+briaBot.on('message', (msg) => {
+    if (msg.new_chat_members) {
+        msg.new_chat_members.forEach(m => {
+            if(!m.is_bot) briaBot.sendMessage(msg.chat.id, `Welcome @${m.username || m.first_name}! My name is Bria 🌸. DM me /start for your package!`);
+        });
+    }
+    if (msg.chat.type === 'private' && msg.text && !msg.text.startsWith('/start')) {
+        briaBot.sendMessage(msg.chat.id, ADMIN_CONTACT_MSG);
+    }
+});
+
+briaBot.onText(/\/start/, (msg) => {
+    if (msg.chat.type === 'private') {
+        briaBot.sendMessage(msg.chat.id, BRIA_WELCOME_PACKAGE);
+    }
+});
+
+// --- CRON JOB ---
+cron.schedule('0 0 * * *', async () => {
+    const { count } = await supabase.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'verified');
+    if (count > 0) {
+        adminBot.sendMessage(ADMIN_CHAT_ID, `📊 *Daily Report:* Total Verified Users so far: ${count}`);
+    }
+});
+
+// --- START SERVER ---
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
