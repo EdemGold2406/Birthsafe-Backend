@@ -68,11 +68,10 @@ const getRejectedEmail = (reason) => `
 `;
 
 const getBotWelcomeMsg = () => `
-To new mamas just joining ❤️
 
 Welcome 😊🤗 
 
-You have been added to your cohort, Birth Without Wahala 14.
+You have been added to your cohort.
 
 Please take note that access to your materials takes about 24hrs -48hrs (working days)after you fill the Google form.
 
@@ -239,7 +238,7 @@ bot.on('message', async (msg) => {
     if (msg.new_chat_members) {
         for (const member of msg.new_chat_members) {
             if (!member.is_bot) {
-                const welcomeShort = `Welcome @${member.username || member.first_name}! 🌸\n\nPlease DM me and click start to receive your welcome package!`;
+                const welcomeShort = `Welcome @${member.username || member.first_name}!My name is Bria. 🌸\n\nPlease DM me and click start to receive your welcome package!`;
                 
                 // Send to group
                 bot.sendMessage(msg.chat.id, welcomeShort);
@@ -271,3 +270,4 @@ cron.schedule('0 0 * * *', async () => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+
