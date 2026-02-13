@@ -231,6 +231,50 @@ app.post('/api/submit-payment', async (req, res) => {
 app.post('/api/verify-payment', async (req, res) => {
   try {
     const { id, status, reason } = req.body;
+    
+    // 1. Fetch user to get name for the notification
+    const { data: user } = await supabase.from('payments').select('*').eq('id', id).single();
+    
+    // 2. Update status in DB
+    await supabase.from('payments').update({ status, rejection_reason: reason || null }).eq('id', id);
+
+    if (status === 'verified') {
+        const amount = parseInt(user.plan_amount.toString().replace(/,/g, ''));
+        let html = amount >= 32000 ? getVerifiedEmail32k() : getVerifiedEmailStandard();
+
+        // 3. Send Email
+        await transporter.sendMail({
+            from: `"BirthSafe NG" <${process.env.EMAIL_USER}>`,
+            to: user.email,
+            subject: 'Welcome to BirthSafe! 🤝',
+            html: html
+        });
+
+        // 4. Send Confirmation to Group
+        await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ *${user.full_name}* has been verified!\nOnboarding email sent.`, { parse_mode: 'Markdown' });
+
+    } else {
+        await transporter.sendMail({
+            from: `"BirthSafe NG" <${process.env.EMAIL_USER}>`,
+            to: user.email,
+            subject: 'Payment Verification Failed ❌',
+            html: getRejectedEmail(reason)
+        });
+
+        // Confirmation to Group
+        await adminBot.sendMessage(ADMIN_CHAT_ID, `❌ *${user.full_name}* has been REJECTED.\nReason: ${reason}`, { parse_mode: 'Markdown' });
+    }
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Update failed" });
+  }
+});
+
+app.post('/api/verify-payment', async (req, res) => {
+  try {
+    const { id, status, reason } = req.body;
     const { data: user } = await supabase.from('payments').select('*').eq('id', id).single();
     
     await supabase.from('payments').update({ status, rejection_reason: reason || null }).eq('id', id);
@@ -295,4 +339,5 @@ cron.schedule('0 0 * * *', async () => {
 // --- START SERVER ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+
 
