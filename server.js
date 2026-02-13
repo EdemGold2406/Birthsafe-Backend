@@ -39,6 +39,51 @@ const transporter = nodemailer.createTransport({
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+
+app.post('/api/submit-payment', async (req, res) => {
+  try {
+    const { fullName, plan, telegramNumber, country, state, email, receiptUrls } = req.body;
+
+    console.log("Received Payload:", req.body); // Check Render logs to see this!
+
+    const { data, error } = await supabase
+      .from('payments')
+      .insert([{ 
+        full_name: fullName, 
+        plan_amount: plan, 
+        telegram_number: telegramNumber,
+        country: country, 
+        state_province: state, 
+        email: email, 
+        receipt_urls: receiptUrls // MUST BE PLURAL text[] in Supabase
+      }])
+      .select()
+      .single();
+
+    if (error) {
+        console.error("Supabase Insert Error:", error);
+        return res.status(400).json({ error: error.message });
+    }
+
+    const message = `
+🚨 *New Payment Alert!*
+👤 *Name:* ${fullName}
+💰 *Plan:* ₦${plan}
+✈️ *Telegram:* \`${telegramNumber}\`
+📸 *Receipts:* ${receiptUrls.length}
+
+👇 *Verify here:*
+[Open Admin Dashboard](${FRONTEND_URL}?id=${data.id})`;
+
+    await adminBot.sendMessage(ADMIN_CHAT_ID, message, { parse_mode: 'Markdown' });
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("Route Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 // --- EMAIL TEMPLATES (FULL TEXT) ---
 
 const getVerifiedEmailStandard = () => `
@@ -250,3 +295,4 @@ cron.schedule('0 0 * * *', async () => {
 // --- START SERVER ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+
