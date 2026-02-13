@@ -68,6 +68,18 @@ const getRejectedEmail = (reason) => `
 <p>Regards,<br>BirthSafe Admin</p>
 `;
 
+// --- BOT INITIALIZATION ---
+const adminBot = new TelegramBot(process.env.ADMIN_BOT_TOKEN, { polling: false });
+
+// Bria Bot: We add "params" to help clear any hanging connections
+const briaBot = new TelegramBot(process.env.BRIA_BOT_TOKEN, { 
+    polling: {
+        params: {
+            timeout: 10
+        }
+    } 
+});
+
 const BRIA_PACKAGE = `
 To new mamas just joining ❤️
 Welcome 😊🤗 
@@ -169,3 +181,4 @@ briaBot.onText(/\/start/, (msg) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+
