@@ -10,21 +10,21 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// --- HEALTH CHECK FOR RENDER ---
+app.get('/', (req, res) => res.send('BirthSafe Backend is Active and Running! 🚀'));
+
 // --- CONFIGURATION ---
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL;
-const COMPLAINT_PHONE = "08123456789"; // Replace with actual support number
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID; // The Group ID for Admins
+const COMPLAINT_PHONE = "08123456789"; 
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
 // --- BOT INITIALIZATION ---
-// 1. Admin Bot: Handles payment alerts (No polling needed, it just pushes messages)
 const adminBot = new TelegramBot(process.env.ADMIN_BOT_TOKEN, { polling: false });
-
-// 2. Bria Bot: Handles community chat (Polling TRUE to listen for new members/messages)
 const briaBot = new TelegramBot(process.env.BRIA_BOT_TOKEN, { polling: true });
 
-// EMAIL CONFIG
+// --- EMAIL CONFIG ---
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -75,19 +75,23 @@ const BRIA_WELCOME_PACKAGE = `
 To new mamas just joining ❤️
 
 Welcome 😊🤗 
+
 You have been added to your cohort.
 
-Please take note that access to your materials takes about 24hrs -48hrs (working days)after you fill the Google form.
+Please take note that access to your materials takes about 24hrs - 48hrs (working days) after you fill the Google form.
+
 Now that you have been added to the group, the messages on the group might seem overwhelming and confusing.
+
 But calm down, mama.❤️ 
 
 Your priority should be getting your materials and implementing what you've learnt.
+
 The chats in the group are from mamas who have already accessed their resources and need further clarification on them.
 
 While you wait for access, kindly do and note the following:
 
 1. Create a Selar account because you will need it to access your materials.
-2. Go through the pinned messages ( Look up your  screen to locate it. Keep tapping to see other messages that are pinned)
+2. Go through the pinned messages (Look up your screen to locate it. Keep tapping to see other messages that are pinned)
 3. Join the 'Online Event Centre' and watch all the Replays pinned on the group. Here is the link👇
 https://t.me/+FiZMxogFUXAzZGE0
 
@@ -102,11 +106,11 @@ For urgent cases, please go the hospital.
 
 6. If your PCV is less than 36%, we advise that after watching your PCV and Supplements Protocol, join the PCV Challenge Channel. (To be able to do this, fill the form in the pinned messages and wait for a reply within 48hrs - 72hrs)
 
-7. Kindly note that the 'Online Event Centre' is where we usually have our Group Consult Session every Sunday ( for the duration of the program) and Morning Check-in.
+7. Kindly note that the 'Online Event Centre' is where we usually have our Group Consult Session every Sunday (for the duration of the program) and Morning Check-in.
 Ensure you drop your question before the Group Consult Session with Doctor by 7pm. The channel to drop your questions will be opened and provided to you Sunday morning.
 Please, be present during the consult session so that you can answer follow-up questions from the doctor.
 
-8. When you get to 35/36 weeks, you are eligible to join the Injury Timer Group where you will NIL as a group every Sunday.(Please note that you still have to continue your individual NIL)
+8. When you get to 35/36 weeks, you are eligible to join the Injury Timer Group where you will NIL as a group every Sunday. (Please note that you still have to continue your individual NIL)
 9. You will be added to the Premium/Postpartum Group when the Regular program ends. We will announce in the group at the appropriate time.
 10. Please, make use of the pinned messages. It contains vital information and helpful tips that can help you in your Pregnancy.
 
@@ -146,7 +150,6 @@ app.post('/api/submit-payment', async (req, res) => {
 
     if (error) throw error;
 
-    // Notify Admin Group via Admin Bot
     const verifyLink = `${FRONTEND_URL}?id=${data.id}`;
     const message = `
 🚨 *New Payment Alert!*
@@ -187,32 +190,22 @@ app.post('/api/verify-payment', async (req, res) => {
         .eq('id', id);
 
     if (status === 'verified') {
-        // Admin Bot notifies Admin Group
         await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ Payment for *${user.full_name}* (₦${user.plan_amount}) has been VERIFIED.`, { parse_mode: 'Markdown' });
 
-        // Email Logic
-        let emailHtml = "";
-        const amount = parseInt(user.plan_amount);
-        
-        if (amount >= 32000) {
-            emailHtml = getVerifiedEmail32k();
-        } else {
-            emailHtml = getVerifiedEmail20k();
-        }
+        let emailHtml = parseInt(user.plan_amount) >= 32000 ? getVerifiedEmail32k() : getVerifiedEmail20k();
 
         await transporter.sendMail({
-            from: '"BirthSafe NG" <' + process.env.EMAIL_USER + '>',
+            from: `"BirthSafe NG" <${process.env.EMAIL_USER}>`,
             to: user.email,
             subject: 'Welcome to BirthSafe! 🤝',
             html: emailHtml
         });
 
     } else if (status === 'rejected') {
-        // Admin Bot notifies Admin Group
         await adminBot.sendMessage(ADMIN_CHAT_ID, `❌ Payment for *${user.full_name}* REJECTED.\nReason: ${reason}`, { parse_mode: 'Markdown' });
         
         await transporter.sendMail({
-            from: '"BirthSafe NG" <' + process.env.EMAIL_USER + '>',
+            from: `"BirthSafe NG" <${process.env.EMAIL_USER}>`,
             to: user.email,
             subject: 'Payment Verification Failed ❌',
             html: getRejectedEmail(reason)
@@ -228,8 +221,6 @@ app.post('/api/verify-payment', async (req, res) => {
 });
 
 // --- BOT LOGIC (BRIA) ---
-
-// 1. Welcome New Members in Group
 briaBot.on('message', async (msg) => {
     if (msg.new_chat_members) {
         for (const member of msg.new_chat_members) {
@@ -241,26 +232,21 @@ briaBot.on('message', async (msg) => {
     }
 });
 
-// 2. Handle /start command in DM (Send Package)
 briaBot.onText(/\/start/, (msg) => {
     if (msg.chat.type === 'private') {
         briaBot.sendMessage(msg.chat.id, BRIA_WELCOME_PACKAGE, { disable_web_page_preview: true });
     }
 });
 
-// 3. Handle General Questions in DM (Redirect to Vihktorrr)
 briaBot.on('message', (msg) => {
-    // Ignore /start, new members, or messages from other bots
-    if (msg.new_chat_members || msg.from.is_bot) return;
+    if (msg.new_chat_members || (msg.from && msg.from.is_bot)) return;
     if (msg.text && msg.text.startsWith('/start')) return;
 
-    // If it's a DM, or if Bria is mentioned in a group
     if (msg.chat.type === 'private') {
         briaBot.sendMessage(msg.chat.id, ADMIN_CONTACT_MSG);
     }
 });
 
-// --- CRON JOB: DAILY REPORT (Admin Bot) ---
 cron.schedule('0 0 * * *', async () => {
   const { count } = await supabase
     .from('payments')
@@ -274,5 +260,3 @@ cron.schedule('0 0 * * *', async () => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
-
-
