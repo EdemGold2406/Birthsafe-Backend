@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const TelegramBot = require('node-telegram-bot-api');
-const { Resend } = require('resend'); // Official Resend SDK
 const cron = require('node-cron');
 require('dotenv').config();
 
@@ -18,59 +17,76 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
-
-// --- INITIALIZE RESEND ---
-// Make sure RESEND_API_KEY is set in Render Environment Variables
-const resend = new Resend(process.env.RESEND_API_KEY);
+const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL; // The URL you got from Google
 
 // --- BOT INITIALIZATION ---
 const adminBot = new TelegramBot(process.env.ADMIN_BOT_TOKEN, { polling: false });
-
 const briaBot = new TelegramBot(process.env.BRIA_BOT_TOKEN, { 
-    polling: {
-        params: { timeout: 10 }
-    } 
+    polling: { params: { timeout: 10 } } 
 });
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// --- EMAIL TEMPLATES ---
+// --- NEW EMAIL FUNCTION (Via Google Script) ---
+async function sendEmail(to, subject, htmlBody) {
+    if (!GOOGLE_SCRIPT_URL) {
+        console.error("Missing GOOGLE_SCRIPT_URL");
+        return;
+    }
 
+    try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                to: to,
+                subject: subject,
+                htmlBody: htmlBody
+            })
+        });
+        
+        const result = await response.json();
+        console.log("Email Result:", result);
+        return result;
+    } catch (error) {
+        console.error("Failed to send email via Google Script:", error);
+    }
+}
+
+// --- TEMPLATES ---
 const getVerifiedEmailStandard = () => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
 <p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
 <p>Please, listen to the Inaugural Session replay pinned in the group.</p>
-<p>You can also find the program schedule in the pinned messages in the group. Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
-<p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
+<p>Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
 <p><b>To complete your registration, please follow these steps:</b></p>
-<p>Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you.</p>
+<p>Click the link below to fill out the forms:</p>
 <p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
-<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
+<p>Thank you for your cooperation!</p>
 `;
 
 const getVerifiedEmail32k = () => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
 <p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
 <p>Please, listen to the Inaugural Session replay pinned in the group. Access to materials granted in 24-48hrs.</p>
-<p>To complete your registration, please follow these steps:</p>
+<p>To complete your registration, please click the link below:</p>
 <p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
 <p>Access your bonus resources here: <a href="https://birthsafeng.myflodesk.com/bwwps">https://birthsafeng.myflodesk.com/bwwps</a></p>
-<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
+<p>Thank you for your cooperation!</p>
 `;
 
 const getRejectedEmail = (reason) => `
 <p>Hello Mama,</p>
-<p>We reviewed your payment submission for the Birth Without Wahala Program.</p>
-<p style="color:red;"><b>Unfortunately, it was not verified.</b></p>
+<p>We reviewed your payment submission. <span style="color:red;"><b>Unfortunately, it was not verified.</b></span></p>
 <p><b>Reason:</b> ${reason}</p>
 <p>If you believe this is a mistake, please call: 08123456789</p>
 <p>Regards,<br>BirthSafe Admin</p>
 `;
 
 const BRIA_WELCOME_PACKAGE = `
-
+To new mamas just joining ❤️
 Welcome 😊🤗 
-You just joined your cohort.
+You have been added to your cohort.
 Your priority should be getting your materials and implementing what you've learnt.
 
 1. Create a Selar account.
@@ -150,30 +166,14 @@ app.post('/api/verify-payment', async (req, res) => {
         const amount = parseInt(amountStr);
         let htmlContent = amount >= 32000 ? getVerifiedEmail32k() : getVerifiedEmailStandard();
 
-        // --- RESEND EMAIL LOGIC ---
-        // NOTE: 'from' must be onboarding@resend.dev until you verify your domain
-        const emailResponse = await resend.emails.send({
-            from: 'BirthSafe NG <onboarding@resend.dev>', 
-            to: [user.email], 
-            subject: 'Welcome to BirthSafe! 🤝',
-            html: htmlContent
-        });
+        // Send Email via Google Script (No await, fire and forget)
+        sendEmail(user.email, 'Welcome to BirthSafe! 🤝', htmlContent);
 
-        if (emailResponse.error) {
-            console.error("Resend Error:", emailResponse.error);
-            // We do NOT throw error here, so we can still notify Telegram
-        }
-
-        // Telegram Confirmation
-        await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ *${user.full_name}* verified!\nEmail Status: ${emailResponse.error ? '⚠️ Failed' : '✅ Sent'}`, { parse_mode: 'Markdown' });
+        await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ *${user.full_name}* verified!\nEmail Status: Sending...`, { parse_mode: 'Markdown' });
 
     } else if (status === 'rejected') {
-        const emailResponse = await resend.emails.send({
-            from: 'BirthSafe NG <onboarding@resend.dev>',
-            to: [user.email],
-            subject: 'Payment Verification Update ❌',
-            html: getRejectedEmail(reason)
-        });
+        // Send Email via Google Script
+        sendEmail(user.email, 'Payment Verification Update ❌', getRejectedEmail(reason));
 
         await adminBot.sendMessage(ADMIN_CHAT_ID, `❌ *${user.full_name}* REJECTED.\nReason: ${reason}`, { parse_mode: 'Markdown' });
     }
@@ -205,7 +205,7 @@ briaBot.on('message', (msg) => {
 
 briaBot.onText(/\/start/, (msg) => {
     if (msg.chat.type === 'private') {
-        briaBot.sendMessage(msg.chat.id, BRIA_WELCOME_PACKAGE);
+        briaBot.sendMessage(msg.chat.id, BRIA_WELCOME_PACKAGE, { disable_web_page_preview: true });
     }
 });
 
