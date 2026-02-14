@@ -56,7 +56,7 @@ async function sendEmail(to, subject, htmlBody) {
 // --- TEMPLATES ---
 const getVerifiedEmailStandard = () => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
-<p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
+<p>You have successfully enrolled in the Birth Without Wahala Program.</p>
 <p>Please, listen to the Inaugural Session replay pinned in the group.</p>
 <p>Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
 <p><b>To complete your registration, please follow these steps:</b></p>
@@ -67,7 +67,7 @@ const getVerifiedEmailStandard = () => `
 
 const getVerifiedEmail32k = () => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
-<p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
+<p>You have successfully enrolled in the Birth Without Wahala Program.</p>
 <p>Please, listen to the Inaugural Session replay pinned in the group. Access to materials granted in 24-48hrs.</p>
 <p>To complete your registration, please click the link below:</p>
 <p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
@@ -79,7 +79,8 @@ const getRejectedEmail = (reason) => `
 <p>Hello Mama,</p>
 <p>We reviewed your payment submission. <span style="color:red;"><b>Unfortunately, it was not verified.</b></span></p>
 <p><b>Reason:</b> ${reason}</p>
-<p>If you believe this is a mistake, please call: 08123456789</p>
+<p>If you believe this is a mistake, please send an email to: mamacarebirthsafe@gmail.com</p>
+<p>Please feel free to upload the right receipt if there is an issue.</p>
 <p>Regards,<br>BirthSafe Admin</p>
 `;
 
@@ -220,3 +221,4 @@ cron.schedule('0 0 * * *', async () => {
 // --- START SERVER ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+
