@@ -17,7 +17,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
-const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL; // The URL you got from Google
+const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL; 
 
 // --- BOT INITIALIZATION ---
 const adminBot = new TelegramBot(process.env.ADMIN_BOT_TOKEN, { polling: false });
@@ -27,52 +27,68 @@ const briaBot = new TelegramBot(process.env.BRIA_BOT_TOKEN, {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// --- NEW EMAIL FUNCTION (Via Google Script) ---
-async function sendEmail(to, subject, htmlBody) {
-    if (!GOOGLE_SCRIPT_URL) {
-        console.error("Missing GOOGLE_SCRIPT_URL");
-        return;
+// --- COHORT LINK HELPER ---
+/**
+ * Fetches the currently active Telegram link from Supabase.
+ * Make sure you created the 'app_settings' table!
+ */
+async function getActiveCohortLink() {
+    try {
+        const { data, error } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('id', 'active_cohort_link')
+            .single();
+        
+        if (error || !data) return "https://t.me/birthsafe_admin"; // Safety fallback
+        return data.value;
+    } catch (e) {
+        return "https://t.me/birthsafe_admin";
     }
+}
 
+// --- EMAIL FUNCTION (Via Google Script) ---
+async function sendEmail(to, subject, htmlBody) {
+    if (!GOOGLE_SCRIPT_URL) return console.error("Missing GOOGLE_SCRIPT_URL");
     try {
         const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                to: to,
-                subject: subject,
-                htmlBody: htmlBody
-            })
+            body: JSON.stringify({ to: to, subject: subject, htmlBody: htmlBody })
         });
-        
-        const result = await response.json();
-        console.log("Email Result:", result);
-        return result;
+        return await response.json();
     } catch (error) {
-        console.error("Failed to send email via Google Script:", error);
+        console.error("Failed to send email:", error);
     }
 }
 
-// --- TEMPLATES ---
-const getVerifiedEmailStandard = () => `
+// --- EMAIL TEMPLATES ---
+
+const getVerifiedEmailStandard = (tgLink) => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
 <p>You have successfully enrolled in the Birth Without Wahala Program.</p>
-<p>Please, listen to the Inaugural Session replay pinned in the group.</p>
+<p><b>Step 1: Join your Cohort Telegram Group here: <a href="${tgLink}">${tgLink}</a></b></p>
+<p>Please, listen to the Inaugural Session replay pinned in the group once you join.</p>
 <p>Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
-<p><b>To complete your registration, please follow these steps:</b></p>
-<p>Click the link below to fill out the forms:</p>
+<p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
+<p><b>Step 2: Complete your registration:</b></p>
+<p>Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you.</p>
 <p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
-<p>Thank you for your cooperation!</p>
+<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
 `;
 
-const getVerifiedEmail32k = () => `
+const getVerifiedEmail32k = (tgLink) => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
 <p>You have successfully enrolled in the Birth Without Wahala Program.</p>
-<p>Please, listen to the Inaugural Session replay pinned in the group. Access to materials granted in 24-48hrs.</p>
-<p>To complete your registration, please click the link below:</p>
+<p><b>Step 1: Join your Cohort Telegram Group here: <a href="${tgLink}">${tgLink}</a></b></p>
+<p>Please, listen to the Inaugural Session replay pinned in the group. Access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
+<p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
+<p><b>Step 2: Complete your registration:</b></p>
+<p>Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you.</p>
 <p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
-<p>Access your bonus resources here: <a href="https://birthsafeng.myflodesk.com/bwwps">https://birthsafeng.myflodesk.com/bwwps</a></p>
-<p>Thank you for your cooperation!</p>
+<p><b>Bonus Resource Access:</b></p>
+<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
+<p><a href="https://birthsafeng.myflodesk.com/bwwps">https://birthsafeng.myflodesk.com/bwwps</a></p>
 `;
 
 const getRejectedEmail = (reason) => `
@@ -80,18 +96,26 @@ const getRejectedEmail = (reason) => `
 <p>We reviewed your payment submission. <span style="color:red;"><b>Unfortunately, it was not verified.</b></span></p>
 <p><b>Reason:</b> ${reason}</p>
 <p>If you believe this is a mistake, please send an email to: mamacarebirthsafe@gmail.com</p>
-<p>Please feel free to upload the right receipt if there is an issue.</p>
+<p>Please feel free to upload the right receipt via the portal if there was an issue.</p>
 <p>Regards,<br>BirthSafe Admin</p>
 `;
 
 const BRIA_WELCOME_PACKAGE = `
 To new mamas just joining ❤️
+
 Welcome 😊🤗 
+
 You have been added to your cohort.
+
+Please take note that access to your materials takes about 24hrs -48hrs (working days)after you fill the Google form.
+
+Now that you have been added to the group, the messages on the group might seem overwhelming and confusing. But calm down, mama.❤️ 
+
 Your priority should be getting your materials and implementing what you've learnt.
 
-1. Create a Selar account.
-2. Go through pinned messages.
+While you wait for access, kindly do and note the following:
+1. Create a Selar account because you will need it to access your materials.
+2. Go through the pinned messages.
 3. Join 'Online Event Centre': https://t.me/+FiZMxogFUXAzZGE0
 4. Join 'Consult Session Replays': https://t.me/+cIx-kOJwyVJiMjZk
 
@@ -158,24 +182,26 @@ app.post('/api/verify-payment', async (req, res) => {
     const { data: user, error: fetchError } = await supabase.from('payments').select('*').eq('id', id).single();
     if (fetchError || !user) throw new Error("Record not found");
     
-    // Update DB
-    const { error: updateError } = await supabase.from('payments').update({ status, rejection_reason: reason || null }).eq('id', id);
-    if (updateError) throw updateError;
+    // Update DB Status
+    await supabase.from('payments').update({ status, rejection_reason: reason || null }).eq('id', id);
 
     if (status === 'verified') {
+        // FETCH DYNAMIC COHORT LINK FROM DB
+        const activeTGLink = await getActiveCohortLink();
+
         const amountStr = user.plan_amount.toString().replace(/,/g, '');
         const amount = parseInt(amountStr);
-        let htmlContent = amount >= 32000 ? getVerifiedEmail32k() : getVerifiedEmailStandard();
+        
+        let htmlContent = amount >= 32000 
+            ? getVerifiedEmail32k(activeTGLink) 
+            : getVerifiedEmailStandard(activeTGLink);
 
-        // Send Email via Google Script (No await, fire and forget)
         sendEmail(user.email, 'Welcome to BirthSafe! 🤝', htmlContent);
 
-        await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ *${user.full_name}* verified!\nEmail Status: Sending...`, { parse_mode: 'Markdown' });
+        await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ *${user.full_name}* verified!\nCohort Link sent: ${activeTGLink}`, { parse_mode: 'Markdown' });
 
     } else if (status === 'rejected') {
-        // Send Email via Google Script
         sendEmail(user.email, 'Payment Verification Update ❌', getRejectedEmail(reason));
-
         await adminBot.sendMessage(ADMIN_CHAT_ID, `❌ *${user.full_name}* REJECTED.\nReason: ${reason}`, { parse_mode: 'Markdown' });
     }
 
@@ -210,7 +236,7 @@ briaBot.onText(/\/start/, (msg) => {
     }
 });
 
-// --- CRON JOB (DAILY STATS) ---
+// --- CRON JOB ---
 cron.schedule('0 0 * * *', async () => {
     const { count } = await supabase.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'verified');
     if (count > 0) {
@@ -221,4 +247,3 @@ cron.schedule('0 0 * * *', async () => {
 // --- START SERVER ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
-
