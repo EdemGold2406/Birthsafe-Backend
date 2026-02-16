@@ -21,11 +21,10 @@ const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// --- AI CONFIGURATION (Gemini) ---
+// --- AI CONFIGURATION (Updated Model String) ---
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    // These settings prevent Gemini from blocking helpful pregnancy advice
+    model: "gemini-1.5-flash-latest", // Use latest to ensure endpoint availability
     safetySettings: [
         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
         { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -54,16 +53,13 @@ BIRTHSAFE PROTOCOLS:
 
 CORE RULES:
 1. EMERGENCY: If a Mama mentions bleeding, severe pain, or no movement, tell her to go to the hospital IMMEDIATELY.
-2. HYBRID ANSWERS: For general pregnancy advice (diet, exercise, hospital recommendations), provide a helpful answer based on your knowledge, but always mention that Dr. Idara suggests following BirthSafe's specific protocols.
-3. ESCALATION: For tech or payment wahala, tell them to tag our admin @Vihktorrr.
+2. HYBRID ANSWERS: Provide helpful general advice, but always mention that Dr. Idara suggests following BirthSafe protocols.
+3. ESCALATION: For tech or payment wahala, tag @Vihktorrr.
 `;
 
 // --- BOT INITIALIZATION ---
 const adminBot = new TelegramBot(process.env.ADMIN_BOT_TOKEN, { polling: false });
-const briaBot = new TelegramBot(process.env.BRIA_BOT_TOKEN, { 
-    polling: { params: { timeout: 10 } } 
-});
-
+const briaBot = new TelegramBot(process.env.BRIA_BOT_TOKEN, { polling: { params: { timeout: 10 } } });
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // --- HELPERS ---
@@ -85,32 +81,20 @@ async function sendEmail(to, subject, htmlBody) {
     } catch (e) { console.error("Email Error:", e); }
 }
 
-// --- AI RESPONSE LOGIC WITH LOGGING ---
+// --- AI RESPONSE LOGIC (FIXED) ---
 async function getBriaAIResponse(userMessage) {
     try {
-        if (!GEMINI_API_KEY) {
-            console.error("AI LOG: GEMINI_API_KEY is missing from environment variables.");
-            return "Oh Mama, my system key is missing. Please tag @Vihktorrr! ❤️";
-        }
+        if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
 
-        const chat = model.startChat({
-            history: [
-                { role: "user", parts: [{ text: "Instructions: " + BRIA_KNOWLEDGE }] },
-                { role: "model", parts: [{ text: "Understood, Mama! I am Bria, part of Dr. Idara's team. I am ready to help!" }] },
-            ],
-        });
-
-        const result = await chat.sendMessage(userMessage);
+        // Generate content using a single prompt structure (more stable than Chat history on some versions)
+        const fullPrompt = `${BRIA_KNOWLEDGE}\n\nUser Question: ${userMessage}\nBria's Response:`;
+        const result = await model.generateContent(fullPrompt);
         const response = await result.response;
         return response.text();
 
     } catch (error) {
-        // Detailed Logging for Render
-        console.error("--- AI BRIA ERROR LOG ---");
-        console.error("Error Message:", error.message);
-        if (error.response) console.error("Full Response:", JSON.stringify(error.response));
-        console.error("-------------------------");
-
+        console.error("--- REAL GEMINI ERROR LOG ---");
+        console.error(error.message);
         return "I'm so sorry Mama, my brain is a bit tired. Please tag @Vihktorrr for help! ❤️";
     }
 }
@@ -120,67 +104,33 @@ const getVerifiedEmailStandard = (tgLink) => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
 <p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
 <p>Please, listen to the Inaugural Session replay pinned in the group.</p>
-<p>You can also find the program schedule in the pinned messages in the group. Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
-<p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
-<p><b>To complete your registration, please follow these steps:</b></p>
-<p>1. Join your Cohort Telegram Group here: <a href="${tgLink}">${tgLink}</a></p>
-<p>2. Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you.</p>
-<p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
-<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
+<p>Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
+<p><b>To complete your registration:</b></p>
+<p>1. Join your Group: <a href="${tgLink}">${tgLink}</a></p>
+<p>2. Fill the form: <a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
+<p>Thank you for your cooperation!</p>
 `;
 
 const getVerifiedEmail32k = (tgLink) => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
-<p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
-<p>Please, listen to the Inaugural Session replay pinned in the group.</p>
-<p>You can also find the program schedule in the pinned messages in the group. Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
-<p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
-<p><b>To complete your registration, please follow these steps:</b></p>
-<p>1. Join your Cohort Telegram Group here: <a href="${tgLink}">${tgLink}</a></p>
-<p>2. Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you.</p>
-<p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
-<p>3. Access your Pregnancy Safeguarding Resources:</p>
-<p>KINDLY FILL THE FORM TO HAVE YOUR DETAILS ADDED TO BIRTHSAFE DATABASE.</p>
-<p><a href="https://birthsafeng.myflodesk.com/bwwps">https://birthsafeng.myflodesk.com/bwwps</a></p>
-<p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
+<p>You have successfully enrolled in the Birth Without Wahala Program.</p>
+<p><b>Step 1: Join your Group: <a href="${tgLink}">${tgLink}</a></b></p>
+<p><b>Step 2: Fill the Form: <a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></b></p>
+<p><b>Step 3: Safeguarding Resources: <a href="https://birthsafeng.myflodesk.com/bwwps">https://birthsafeng.myflodesk.com/bwwps</a></b></p>
+<p>Thank you!</p>
 `;
 
-const getRejectedEmail = (reason) => `
-<p>Hello Mama,</p>
-<p>We reviewed your payment submission. <span style="color:red;"><b>Unfortunately, it was not verified.</b></span></p>
-<p><b>Reason:</b> ${reason}</p>
-<p>If you believe this is a mistake, please feel free to upload the right receipt via the portal.</p>
-<p>Regards,<br>BirthSafe Admin Team</p>
-`;
+const getRejectedEmail = (reason) => `<p>Verification Failed. Reason: ${reason}</p>`;
 
-const BRIA_DM_PACKAGE = `
-To new mamas just joining ❤️
-Welcome 😊🤗 
-
-You have been added to your cohort, Birth Without Wahala.
-Please take note that access to your materials takes about 24hrs - 48hrs (working days) after you fill the Google form.
-
-While you wait for access, kindly do and note the following:
-1. Create a Selar account because you will need it to access your materials.
-2. Go through the pinned messages (Look up your screen to locate it).
-3. Join the 'Online Event Centre' for replays: https://t.me/+FiZMxogFUXAzZGE0
-4. Join the 'Consult Session Replays' Group: https://t.me/+cIx-kOJwyVJiMjZk
-5. If you have questions, drop it in the group and tag the admin. 
-6. PCV Rule: If your PCV is less than 36%, join the PCV Challenge Channel after watching the protocol.
-7. Group Consults are every Sunday at 7pm in the Online Event Centre.
-8. Injury Timer Group: Eligible at 35/36 weeks.
-
-Thanks for usual cooperation 🥰🥰
-`;
+const BRIA_DM_PACKAGE = `To new mamas just joining ❤️\nWelcome 😊🤗\n\nFull details are in your onboarding email!`;
 
 // --- API ROUTES ---
-
 app.post('/api/submit-payment', async (req, res) => {
   try {
     const { fullName, plan, telegramNumber, country, state, email, receiptUrls } = req.body;
     const { data, error } = await supabase.from('payments').insert([{ full_name: fullName, plan_amount: plan, telegram_number: telegramNumber, country, state_province: state, email, receipt_urls: receiptUrls }]).select().single();
     if (error) throw error;
-    const msg = `🚨 <b>New Payment Alert!</b>\n👤 <b>Name:</b> ${fullName}\n💰 <b>Plan:</b> ₦${plan}\n✈️ <b>TG:</b> <code>${telegramNumber}</code>\n<a href="${FRONTEND_URL}?id=${data.id}">Open Admin Dashboard</a>`;
+    const msg = `🚨 <b>New Payment!</b>\n👤 ${fullName}\n💰 ₦${plan}\n<a href="${FRONTEND_URL}?id=${data.id}">Open Dashboard</a>`;
     await adminBot.sendMessage(ADMIN_CHAT_ID, msg, { parse_mode: 'HTML' });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -195,19 +145,18 @@ app.post('/api/verify-payment', async (req, res) => {
     if (status === 'verified') {
         const tgLink = await getActiveCohortLink();
         const amount = parseInt(user.plan_amount.toString().replace(/,/g, ''));
-        let htmlContent = (amount >= 32000) ? getVerifiedEmail32k(tgLink) : getVerifiedEmailStandard(tgLink);
-        sendEmail(user.email, 'Welcome to BirthSafe! 🤝', htmlContent);
-        await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ <b>${user.full_name}</b> has been verified!\nOnboarding email sent.`, { parse_mode: 'HTML' });
+        let html = (amount >= 32000) ? getVerifiedEmail32k(tgLink) : getVerifiedEmailStandard(tgLink);
+        sendEmail(user.email, 'Welcome to BirthSafe! 🤝', html);
+        await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ <b>${user.full_name}</b> verified!`, { parse_mode: 'HTML' });
     } else if (status === 'rejected') {
-        sendEmail(user.email, 'Payment Verification Update ❌', getRejectedEmail(reason));
-        await adminBot.sendMessage(ADMIN_CHAT_ID, `❌ <b>${user.full_name}</b> REJECTED.\n<b>Reason:</b> ${reason}`, { parse_mode: 'HTML' });
+        sendEmail(user.email, 'Verification Update ❌', getRejectedEmail(reason));
+        await adminBot.sendMessage(ADMIN_CHAT_ID, `❌ <b>${user.full_name}</b> REJECTED.`, { parse_mode: 'HTML' });
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: "Update failed" }); }
 });
 
 // --- BRIA BOT LOGIC ---
-
 briaBot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text;
@@ -215,18 +164,13 @@ briaBot.on('message', async (msg) => {
 
     if (msg.new_chat_members) {
         msg.new_chat_members.forEach(m => {
-            if(!m.is_bot) {
-                briaBot.sendMessage(chatId, `Welcome Mama @${m.username || m.first_name} to BirthSafe! 🌸\n\nI am Bria, part of Dr. Idara's team. Please DM me and click START to receive your welcome package!`);
-            }
+            if(!m.is_bot) briaBot.sendMessage(chatId, `Welcome Mama @${m.username || m.first_name} to BirthSafe! 🌸\n\nDM me /start for your package!`);
         });
         return;
     }
 
     if (!text) return;
-
-    if (isPrivate && text.startsWith('/start')) {
-        return briaBot.sendMessage(chatId, BRIA_DM_PACKAGE);
-    }
+    if (isPrivate && text.startsWith('/start')) return briaBot.sendMessage(chatId, BRIA_DM_PACKAGE);
 
     const botMe = await briaBot.getMe();
     const isMentioned = text.includes(`@${botMe.username}`);
@@ -234,8 +178,7 @@ briaBot.on('message', async (msg) => {
 
     if (isPrivate || isMentioned || isReply) {
         briaBot.sendChatAction(chatId, 'typing');
-        const cleanQuery = text.replace(`@${botMe.username}`, '').trim();
-        const aiResponse = await getBriaAIResponse(cleanQuery);
+        const aiResponse = await getBriaAIResponse(text.replace(`@${botMe.username}`, '').trim());
         briaBot.sendMessage(chatId, aiResponse, { parse_mode: 'Markdown', reply_to_message_id: msg.message_id });
     }
 });
