@@ -3,7 +3,7 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const TelegramBot = require('node-telegram-bot-api');
 const cron = require('node-cron');
-const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
+const Groq = require('groq-sdk');
 require('dotenv').config();
 
 const app = express();
@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(cors());
 
 // --- HEALTH CHECK ---
-app.get('/', (req, res) => res.send('BirthSafe System + AI Bria is Online! 🚀'));
+app.get('/', (req, res) => res.send('BirthSafe System + Bria (Groq) is Online! 🚀'));
 
 // --- CONFIGURATION ---
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -19,21 +19,12 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// --- AI CONFIGURATION (Stable Model) ---
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash", 
-    safetySettings: [
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-    ]
-});
+// --- AI CONFIGURATION (GROQ) ---
+const groq = new Groq({ apiKey: GROQ_API_KEY });
 
-const BRIA_KNOWLEDGE = `
+const BRIA_SYSTEM_PROMPT = `
 You are Bria, the warm, motherly, and professional AI Assistant for BirthSafe Nigeria. 
 You work directly under the leadership of our founder, Dr. Idara. 
 
@@ -58,10 +49,7 @@ CORE RULES:
 `;
 
 // --- BOT INITIALIZATION ---
-// Admin Bot: Strictly for sending alerts (polling: false is CRITICAL)
 const adminBot = new TelegramBot(process.env.ADMIN_BOT_TOKEN, { polling: false });
-
-// Bria Bot: For community interaction
 const briaBot = new TelegramBot(process.env.BRIA_BOT_TOKEN, { 
     polling: { params: { timeout: 10 } } 
 });
@@ -87,38 +75,36 @@ async function sendEmail(to, subject, htmlBody) {
     } catch (e) { console.error("Email Error:", e); }
 }
 
-// --- AI RESPONSE LOGIC (WITH DEBUGGING) ---
+// --- AI RESPONSE LOGIC (GROQ) ---
 async function getBriaAIResponse(userMessage) {
     try {
-        if (!GEMINI_API_KEY) {
-            console.error("❌ CRITICAL: GEMINI_API_KEY is missing from Render Environment Variables.");
+        if (!GROQ_API_KEY) {
+            console.error("CRITICAL: GROQ_API_KEY is missing from Render Variables!");
             return "Oh Mama, my system key is missing. Please tag @Vihktorrr! ❤️";
         }
 
-        const chat = model.startChat({
-            history: [
-                { role: "user", parts: [{ text: "Instructions: " + BRIA_KNOWLEDGE }] },
-                { role: "model", parts: [{ text: "Understood, Mama! I am Bria, part of Dr. Idara's team. I am ready to help!" }] },
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: "system", content: BRIA_SYSTEM_PROMPT },
+                { role: "user", content: userMessage }
             ],
+            // Updated to the latest stable model
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.7,
+            max_tokens: 500,
         });
 
-        const result = await chat.sendMessage(userMessage);
-        const response = await result.response;
-        return response.text();
+        return chatCompletion.choices[0]?.message?.content || "I didn't quite catch that, Mama.";
 
     } catch (error) {
-        // --- DETAILED ERROR LOGGING FOR YOU ---
-        console.error("\n\n🔥 BRIA AI ERROR 🔥");
-        console.error("Error Message:", error.message);
-        if(error.statusText) console.error("Status:", error.statusText);
-        console.error("---------------------\n\n");
-        // --------------------------------------
-
+        console.error("--- GROQ AI ERROR LOG ---");
+        console.error(error.message);
         return "I'm so sorry Mama, my brain is a bit tired. Please tag @Vihktorrr for help! ❤️";
     }
 }
 
-// --- EMAIL TEMPLATES ---
+// --- EMAIL TEMPLATES (FULL VERSION) ---
+
 const getVerifiedEmailStandard = (tgLink) => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
 <p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
@@ -153,7 +139,7 @@ const getRejectedEmail = (reason) => `
 <p>We reviewed your payment submission. <span style="color:red;"><b>Unfortunately, it was not verified.</b></span></p>
 <p><b>Reason:</b> ${reason}</p>
 <p>If you believe this is a mistake, please send an email to: mamacarebirthsafe@gmail.com</p>
-<p>Please feel free to upload the right receipt via the portal if there is an issue.</p>
+<p>Please feel free to upload the right receipt if there is an issue.</p>
 <p>Regards,<br>BirthSafe Admin</p>
 `;
 
