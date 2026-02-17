@@ -25,12 +25,11 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const groq = new Groq({ apiKey: GROQ_API_KEY });
 
 const BRIA_SYSTEM_PROMPT = `
-You are Bria, the warm, motherly, and professional AI Assistant for BirthSafe Nigeria. 
+You are Bria, the warm and professional AI Assistant for BirthSafe Nigeria. 
 You work directly under the leadership of our founder, Dr. Idara. 
 
 TONE & PERSONALITY:
 - Always address the user as "Mama". 
-- Use Nigerian professional warmth (e.g., "Blessing to you," "No wahala," "Safe delivery").
 - You are an integral team member, helpful and safe.
 
 BIRTHSAFE PROTOCOLS:
@@ -107,7 +106,7 @@ async function getBriaAIResponse(userMessage) {
 
 const getVerifiedEmailStandard = (tgLink) => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
-<p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
+<p>You have successfully enrolled in the Birth Without Wahala Program.</p>
 <p>Please, listen to the Inaugural Session replay pinned in the group.</p>
 <p>You can also find the program schedule in the pinned messages in the group. Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
 <p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
@@ -120,7 +119,7 @@ const getVerifiedEmailStandard = (tgLink) => `
 
 const getVerifiedEmail32k = (tgLink) => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
-<p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
+<p>You have successfully enrolled in the Birth Without Wahala Program.</p>
 <p>Please, listen to the Inaugural Session replay pinned in the group.</p>
 <p>You can also find the program schedule in the pinned messages in the group. Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
 <p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
@@ -251,3 +250,4 @@ cron.schedule('0 0 * * *', async () => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`BirthSafe Backend running on port ${PORT}`));
+
