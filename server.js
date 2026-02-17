@@ -3,7 +3,7 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const TelegramBot = require('node-telegram-bot-api');
 const cron = require('node-cron');
-const Groq = require('groq-sdk');
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
 require('dotenv').config();
 
 const app = express();
@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(cors());
 
 // --- HEALTH CHECK ---
-app.get('/', (req, res) => res.send('BirthSafe System + Bria (Groq Llama 3.3) is Online! 🚀'));
+app.get('/', (req, res) => res.send('BirthSafe System + AI Bria is Online! 🚀'));
 
 // --- CONFIGURATION ---
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -19,12 +19,21 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL;
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// --- AI CONFIGURATION (Groq) ---
-const groq = new Groq({ apiKey: GROQ_API_KEY });
+// --- AI CONFIGURATION (Stable Model) ---
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash", 
+    safetySettings: [
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    ]
+});
 
-const BRIA_SYSTEM_PROMPT = `
+const BRIA_KNOWLEDGE = `
 You are Bria, the warm, motherly, and professional AI Assistant for BirthSafe Nigeria. 
 You work directly under the leadership of our founder, Dr. Idara. 
 
@@ -49,7 +58,10 @@ CORE RULES:
 `;
 
 // --- BOT INITIALIZATION ---
+// Admin Bot: Strictly for sending alerts (polling: false is CRITICAL)
 const adminBot = new TelegramBot(process.env.ADMIN_BOT_TOKEN, { polling: false });
+
+// Bria Bot: For community interaction
 const briaBot = new TelegramBot(process.env.BRIA_BOT_TOKEN, { 
     polling: { params: { timeout: 10 } } 
 });
@@ -75,60 +87,62 @@ async function sendEmail(to, subject, htmlBody) {
     } catch (e) { console.error("Email Error:", e); }
 }
 
-// --- AI RESPONSE LOGIC (GROQ - UPDATED MODEL) ---
+// --- AI RESPONSE LOGIC (WITH DEBUGGING) ---
 async function getBriaAIResponse(userMessage) {
     try {
-        if (!GROQ_API_KEY) {
-            console.error("CRITICAL: GROQ_API_KEY is missing!");
+        if (!GEMINI_API_KEY) {
+            console.error("❌ CRITICAL: GEMINI_API_KEY is missing from Render Environment Variables.");
             return "Oh Mama, my system key is missing. Please tag @Vihktorrr! ❤️";
         }
 
-        const chatCompletion = await groq.chat.completions.create({
-            messages: [
-                { role: "system", content: BRIA_SYSTEM_PROMPT },
-                { role: "user", content: userMessage }
+        const chat = model.startChat({
+            history: [
+                { role: "user", parts: [{ text: "Instructions: " + BRIA_KNOWLEDGE }] },
+                { role: "model", parts: [{ text: "Understood, Mama! I am Bria, part of Dr. Idara's team. I am ready to help!" }] },
             ],
-            // UPDATED MODEL HERE:
-            model: "llama-3.3-70b-versatile", 
-            temperature: 0.7,
-            max_tokens: 500,
         });
 
-        return chatCompletion.choices[0]?.message?.content || "I didn't quite catch that, Mama.";
+        const result = await chat.sendMessage(userMessage);
+        const response = await result.response;
+        return response.text();
 
     } catch (error) {
-        console.error("--- GROQ AI ERROR ---");
-        console.error("Message:", error.message);
+        // --- DETAILED ERROR LOGGING FOR YOU ---
+        console.error("\n\n🔥 BRIA AI ERROR 🔥");
+        console.error("Error Message:", error.message);
+        if(error.statusText) console.error("Status:", error.statusText);
+        console.error("---------------------\n\n");
+        // --------------------------------------
+
         return "I'm so sorry Mama, my brain is a bit tired. Please tag @Vihktorrr for help! ❤️";
     }
 }
 
-// --- EMAIL TEMPLATES (FULL VERSION) ---
-
+// --- EMAIL TEMPLATES ---
 const getVerifiedEmailStandard = (tgLink) => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
-<p>You have successfully enrolled in the Birth Without Wahala Program.</p>
-<p><b>Step 1: Join your Cohort Telegram Group here: <a href="${tgLink}">${tgLink}</a></b></p>
-<p>Please, listen to the Inaugural Session replay pinned in the group once you join.</p>
+<p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
+<p>Please, listen to the Inaugural Session replay pinned in the group.</p>
 <p>You can also find the program schedule in the pinned messages in the group. Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
 <p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
-<p><b>Step 2: To complete your registration, please follow these steps:</b></p>
-<p>Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you. If the link doesn’t open, try checking your network or use Google Chrome browser:</p>
+<p><b>To complete your registration, please follow these steps:</b></p>
+<p>1. Join your Cohort Telegram Group here: <a href="${tgLink}">${tgLink}</a></p>
+<p>2. Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you. If the link doesn’t open, try checking your network or use Google Chrome browser</p>
 <p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
 <p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
 `;
 
 const getVerifiedEmail32k = (tgLink) => `
 <p>Welcome, Mama, to Birthsafe School of Pregnancy! 🤝</p>
-<p>You have successfully enrolled in the Birth Without Wahala Program.</p>
-<p><b>Step 1: Join your Cohort Telegram Group here: <a href="${tgLink}">${tgLink}</a></b></p>
-<p>Please, listen to the Inaugural Session replay pinned in the group once you join.</p>
+<p>You have successfully enrolled in the Birth Without Wahala Cohort 14 Program.</p>
+<p>Please, listen to the Inaugural Session replay pinned in the group.</p>
 <p>You can also find the program schedule in the pinned messages in the group. Kindly note that access to your materials/resources will be granted to you within 24hrs - 48hrs (working days) after filling the form(s).</p>
 <p>If you have any questions/concerns, kindly send an email to mamacarebirthsafe@gmail.com</p>
-<p><b>Step 2: To complete your registration, please follow these steps:</b></p>
-<p>Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you. If the link doesn’t open, try checking your network or use Google Chrome browser:</p>
+<p><b>To complete your registration, please follow these steps:</b></p>
+<p>1. Join your Cohort Telegram Group here: <a href="${tgLink}">${tgLink}</a></p>
+<p>2. Click the link below to fill out the forms. Ensure you enter a valid and functional email address, as this will be used to send resources to you. If the link doesn’t open, try checking your network or use Google Chrome browser</p>
 <p><a href="https://forms.gle/gspjv2jxy1kUsvRM8">https://forms.gle/gspjv2jxy1kUsvRM8</a></p>
-<p><b>Step 3: Access your Pregnancy Safeguarding Resources:</b></p>
+<p>3. Access your Pregnancy Safeguarding Resources:</p>
 <p>KINDLY FILL THE FORM TO HAVE YOUR DETAILS ADDED TO BIRTHSAFE DATABASE.</p>
 <p><a href="https://birthsafeng.myflodesk.com/bwwps">https://birthsafeng.myflodesk.com/bwwps</a></p>
 <p>Thank you for your cooperation. We look forward to supporting you on this journey!</p>
@@ -139,7 +153,7 @@ const getRejectedEmail = (reason) => `
 <p>We reviewed your payment submission. <span style="color:red;"><b>Unfortunately, it was not verified.</b></span></p>
 <p><b>Reason:</b> ${reason}</p>
 <p>If you believe this is a mistake, please send an email to: mamacarebirthsafe@gmail.com</p>
-<p>Please feel free to upload the right receipt if there is an issue.</p>
+<p>Please feel free to upload the right receipt via the portal if there is an issue.</p>
 <p>Regards,<br>BirthSafe Admin</p>
 `;
 
@@ -199,10 +213,8 @@ app.post('/api/verify-payment', async (req, res) => {
         sendEmail(user.email, 'Welcome to BirthSafe! 🤝', htmlContent);
         await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ <b>${user.full_name}</b> has been verified!\nOnboarding email sent.`, { parse_mode: 'HTML' });
     } else if (status === 'rejected') {
-        // --- REJECTION EMAIL DISPATCH ---
         const rejectionHtml = getRejectedEmail(reason);
         sendEmail(user.email, 'Payment Verification Update ❌', rejectionHtml);
-        
         await adminBot.sendMessage(ADMIN_CHAT_ID, `❌ <b>${user.full_name}</b> REJECTED.\n<b>Reason:</b> ${reason}`, { parse_mode: 'HTML' });
     }
     res.json({ success: true });
