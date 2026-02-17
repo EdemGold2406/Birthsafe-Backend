@@ -3,7 +3,7 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const TelegramBot = require('node-telegram-bot-api');
 const cron = require('node-cron');
-const Groq = require('groq-sdk'); // Switched to Groq
+const Groq = require('groq-sdk');
 require('dotenv').config();
 
 const app = express();
@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(cors());
 
 // --- HEALTH CHECK ---
-app.get('/', (req, res) => res.send('BirthSafe System + Bria (Groq) is Online! 🚀'));
+app.get('/', (req, res) => res.send('BirthSafe System + Bria (Groq Llama 3.3) is Online! 🚀'));
 
 // --- CONFIGURATION ---
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -75,7 +75,7 @@ async function sendEmail(to, subject, htmlBody) {
     } catch (e) { console.error("Email Error:", e); }
 }
 
-// --- AI RESPONSE LOGIC (GROQ) ---
+// --- AI RESPONSE LOGIC (GROQ - UPDATED MODEL) ---
 async function getBriaAIResponse(userMessage) {
     try {
         if (!GROQ_API_KEY) {
@@ -88,7 +88,8 @@ async function getBriaAIResponse(userMessage) {
                 { role: "system", content: BRIA_SYSTEM_PROMPT },
                 { role: "user", content: userMessage }
             ],
-            model: "llama3-70b-8192", // Powerful and Fast model
+            // UPDATED MODEL HERE:
+            model: "llama-3.3-70b-versatile", 
             temperature: 0.7,
             max_tokens: 500,
         });
@@ -96,11 +97,8 @@ async function getBriaAIResponse(userMessage) {
         return chatCompletion.choices[0]?.message?.content || "I didn't quite catch that, Mama.";
 
     } catch (error) {
-        // DETAILED ERROR LOGGING
         console.error("--- GROQ AI ERROR ---");
         console.error("Message:", error.message);
-        console.error("Type:", error.type);
-        console.error("---------------------");
         return "I'm so sorry Mama, my brain is a bit tired. Please tag @Vihktorrr for help! ❤️";
     }
 }
@@ -201,7 +199,10 @@ app.post('/api/verify-payment', async (req, res) => {
         sendEmail(user.email, 'Welcome to BirthSafe! 🤝', htmlContent);
         await adminBot.sendMessage(ADMIN_CHAT_ID, `✅ <b>${user.full_name}</b> has been verified!\nOnboarding email sent.`, { parse_mode: 'HTML' });
     } else if (status === 'rejected') {
-        sendEmail(user.email, 'Payment Verification Update ❌', getRejectedEmail(reason));
+        // --- REJECTION EMAIL DISPATCH ---
+        const rejectionHtml = getRejectedEmail(reason);
+        sendEmail(user.email, 'Payment Verification Update ❌', rejectionHtml);
+        
         await adminBot.sendMessage(ADMIN_CHAT_ID, `❌ <b>${user.full_name}</b> REJECTED.\n<b>Reason:</b> ${reason}`, { parse_mode: 'HTML' });
     }
     res.json({ success: true });
@@ -215,7 +216,6 @@ briaBot.on('message', async (msg) => {
     const text = msg.text;
     const isPrivate = msg.chat.type === 'private';
 
-    // 1. Group Welcome
     if (msg.new_chat_members) {
         msg.new_chat_members.forEach(m => {
             if(!m.is_bot) {
@@ -227,12 +227,10 @@ briaBot.on('message', async (msg) => {
 
     if (!text) return;
 
-    // 2. Start Command
     if (isPrivate && text.startsWith('/start')) {
         return briaBot.sendMessage(chatId, BRIA_DM_PACKAGE);
     }
 
-    // 3. AI Interaction
     const botMe = await briaBot.getMe();
     const isMentioned = text.includes(`@${botMe.username}`);
     const isReply = msg.reply_to_message && msg.reply_to_message.from.id === botMe.id;
